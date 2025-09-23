@@ -186,6 +186,7 @@ Resources:
       Monitoring: false
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
+      IamInstanceProfile: !Ref MyEC2InstanceProfile
       Tags:
         - Key: study
           Value: MyEC2
