@@ -8,6 +8,10 @@ Parameters:
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: auk83388
+  DBSecretName:
+    Type: String 
+    Default: hinata/db-secrets
+    Description: Secrets Manager secret name
 
 Resources:
   MyVPC:
@@ -119,13 +123,9 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH and HTTP from anywhere
+      GroupDescription: Allow HTTP/HTTPS/8080 traffic
       VpcId: !Ref MyVPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -155,6 +155,25 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      AssumeRolePolicyDocument:
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - ec2.amazonaws.com 
+          Action: sts:AssumeRole 
+    ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  MyEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile 
+    Properties:
+      Roles:
+        - !Ref MyEC2Role 
       
   MyEC2:
     Type: AWS::EC2::Instance
@@ -179,8 +198,8 @@ Resources:
       Engine: MySQL
       EngineVersion: 8.0.41
       LicenseModel: general-public-license
-      MasterUsername: hinata
-      MasterUserPassword: Hinata311
+      MasterUsername: !Sub "{{resolve:secretsmanager:hinata/db-secrets:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:hinata/db-secrets:SecretString:password}}"
       VPCSecurityGroups:
         - !Ref RDSecurityGroup
       DBSubnetGroupName: !Ref MyDBSubnetGroup
