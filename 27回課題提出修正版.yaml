@@ -12,6 +12,9 @@ Parameters:
     Type: String 
     Default: hinata/db-secrets
     Description: Secrets Manager secret name
+  SNSTopicArn:
+    Type: String
+    Description: arn:aws:sns:ap-northeast-1:851697623211:aws31:6c16a9bf-95c2-4100-9524-0775135c5ba3
 
 Resources:
   MyVPC:
@@ -266,6 +269,25 @@ Resources:
           TargetGroupArn: !Ref MyTargetGroup
       Port: 80
       Protocol: HTTP
+
+  #cloudwatch alarm#
+  EC2HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EC2CPUalarm
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 20
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Value: MyEC2
+          Name: InstanceID
+      AlarmActions:
+        - !Ref SNSTopicArn
+      ActionsEnabled: true
 
 
 Outputs:
