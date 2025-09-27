@@ -320,6 +320,51 @@ Resources:
             MetricName: AWSManagedCommonRules
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
+  
+  #CloudWatch Logの作成#
+  WAFLogGroup:
+    Type: AWS::Logs::LogGroup  #cloudwatch logのロググループの作成#
+    Properties:
+      LogGroupName: cloudsormationWAFLog  #ロググループの名前自分決めCloudwatchのファイル名に当たる#
+      RetentionInDays: 30              #ログを何日保存しているのかの指定この場合３０日#
+  
+  WAFToCWLogsPolicy:
+    Type: AWS::Logs::ResourcePolicy
+    Properties:
+      PolicyName: WAFToCWLogsPolicy
+      PolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Service": "delivery.logs.amazonaws.com" },
+              "Action": [ 
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],             
+              "Resource": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:cloudsormationWAFLog:*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "${AWS::AccountId}"
+                },
+                "ArnLike": {
+                  "aws:SourceArn": "arn:aws:wafv2:${AWS::Region}:${AWS::AccountId}:*/*/*"
+                }
+              }
+            }
+          ]
+        }
+
+  WAFLogConfig:
+    Type: AWS::WAFv2::LoggingConfiguration
+    DependsOn: 
+      - WAFToCWLogsPolicy
+      - WAFLogGroup
+    Properties:
+      ResourceArn: !GetAtt MyWebACL.Arn
+      LogDestinationConfigs:
+        - !GetAtt WAFLogGroup.Arn
   #WEBACLとALBの紐づけ#
   WebACLAssociation:                               #WebACLをALBやAPIGatewayni適用#     
     Type: AWS::WAFv2::WebACLAssociation            
@@ -328,13 +373,7 @@ Resources:
       ResourceArn: !Ref  MyELB                         #適用させたいリソース#
       WebACLArn: !GetAtt MyWebACL.Arn                     #紐づけさせたいWEBACL#\
 
-  #CloudWatch Logの作成#
-  WAFLogGroup:
-    Type: AWS::Logs::LogGroup  #cloudwatch logのロググループの作成#
-    Properties:
-      LogGroupName: cloudsormationWAFLog  #ロググループの名前自分決めCloudwatchのファイル名に当たる#
-      RetentionInDays: 30              #ログを何日保存しているのかの指定この場合３０日#
-
+  
  
         
 Outputs:
@@ -353,3 +392,4 @@ Outputs:
   RDSAddress:
     Description: RDS Endpoint
     Value: !GetAtt MyRDS.Endpoint.Address
+    
