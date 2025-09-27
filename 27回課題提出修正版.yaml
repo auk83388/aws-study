@@ -16,6 +16,7 @@ Parameters:
     Type: String
     Description: arn:aws:sns:ap-northeast-1:851697623211:aws31:6c16a9bf-95c2-4100-9524-0775135c5ba3
 
+#vpcの作成#
 Resources:
   MyVPC:
    Type: AWS::EC2::VPC
@@ -69,7 +70,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: study
-          Value: PrivateSubnet2     
+          Value: PrivateSubnet2   
+
+  #インターネットゲートウェイ# 
  
   MyIGW:
    Type: AWS::EC2::InternetGateway
@@ -112,6 +115,8 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
+  #セキュリティグループ#
+
   ELBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -140,6 +145,10 @@ Resources:
         - IpProtocol: tcp 
           FromPort: 8080 
           ToPort: 8080
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
           CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -186,10 +195,10 @@ Resources:
       ImageId: !Ref LatestAmiId
       KeyName: !Ref KeyName
       SubnetId: !Ref PublicSubnet1
+      IamInstanceProfile: !Ref MyEC2InstanceProfile
       Monitoring: false
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
-      IamInstanceProfile: !Ref MyEC2InstanceProfile
       Tags:
         - Key: study
           Value: MyEC2
@@ -270,26 +279,64 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  #cloudwatch alarm#
+#cloudwatch alarm#
   EC2HighCPUAlarm:
-    Type: AWS::CloudWatch::Alarm
+    Type: AWS::CloudWatch::Alarm                   #cloudwatchアラームのリソース作成#
     Properties:
-      AlarmName: EC2CPUalarm
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 60
-      EvaluationPeriods: 2
-      Threshold: 20
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Value: MyEC2
-          Name: InstanceID
-      AlarmActions:
-        - !Ref SNSTopicArn
-      ActionsEnabled: true
+      AlarmName: EC2CPUalarm                       #アラーム名#
+      MetricName: CPUUtilization                   #監視対象のメトリクス（今回の場合はCPU使用率）#
+      Namespace: AWS/EC2                           #メトリクスの属する名前（AWSのEC2の空間にあるという意味）#
+      Statistic: Average                           #統計値（アベレージは標準メトリクス）#
+      Period: 60                                   #評価する秒数間隔#
+      EvaluationPeriods: 2                         #アラームの判定の期間（２の場合２回連続）#
+      Threshold: 20                                #アラームの反応する数値の指定（今回の場合CPU使用率が２０パー超えたら）#
+      ComparisonOperator: GreaterThanThreshold     
+      Dimensions:                                  #どこに対してメトリクスを監視するか指定#
+        - Value: !Ref MyEC2
+          Name: InstanceId
 
+  #WAF WEBACLs#
+  MyWebACL:
+    Type: AWS::WAFv2::WebACL  #webACL本体の作成を行っている#
+    Properties:
+      Name: WebACL
+      Scope: REGIONAL         #WEBACLをどこで監視させるかの範囲を指定しているただまだ確定はしていなく事前に申告している状態（REGIONはALBとAPI Gateway)#      
+      DefaultAction:          #ルールに該当しない場合の動作(許可か拒否の二種類のみ)#
+        Allow: {}
+      VisibilityConfig:       #cloidwatch　Metricとログの設定#
+        MetricName: WebACLMetric   #自分でつける名前cloudwatchに出力される名前#
+        SampledRequestsEnabled: true  #実際にWAFが通過したリクエストのうち一部だけを抜粋して確認できるようにする主にトラブルシューティングに利用#
+        CloudWatchMetricsEnabled: true #WAFでとったメトリクス統計データをCloudwatchに送信する機能#
+      Rules:
+        - Name: AWSManagedCommonRules
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            MetricName: AWSManagedCommonRules
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+  #WEBACLとALBの紐づけ#
+  WebACLAssociation:                               #WebACLをALBやAPIGatewayni適用#     
+    Type: AWS::WAFv2::WebACLAssociation            
+    DependsOn: MyELB
+    Properties:
+      ResourceArn: !Ref  MyELB                         #適用させたいリソース#
+      WebACLArn: !GetAtt MyWebACL.Arn                     #紐づけさせたいWEBACL#\
 
+  #CloudWatch Logの作成#
+  WAFLogGroup:
+    Type: AWS::Logs::LogGroup  #cloudwatch logのロググループの作成#
+    Properties:
+      LogGroupName: cloudsormationWAFLog  #ロググループの名前自分決めCloudwatchのファイル名に当たる#
+      RetentionInDays: 30              #ログを何日保存しているのかの指定この場合３０日#
+
+ 
+        
 Outputs:
   VPCId:
     Description: VPC ID 
@@ -306,4 +353,3 @@ Outputs:
   RDSAddress:
     Description: RDS Endpoint
     Value: !GetAtt MyRDS.Endpoint.Address
-    
