@@ -1,0 +1,390 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AWS-studyテンプレート
+
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: auk83388
+  DBSecretName:
+    Type: String 
+    Default: hinata/db-secrets
+    Description: Secrets Manager secret name
+  SNSTopicArn:
+    Type: String
+    Description: arn:aws:sns:ap-northeast-1:851697623211:aws31:6c16a9bf-95c2-4100-9524-0775135c5ba3
+  
+  NamePrefix:
+    Type: String
+    Default: myapp
+    Description: "リソース名の接頭辞（小文字推奨）"
+
+#vpcの作成#
+Resources:
+  MyVPC:
+   Type: AWS::EC2::VPC
+   Properties:
+    CidrBlock:  10.0.0.0/16
+    EnableDnsSupport: True
+    EnableDnsHostnames: True
+    Tags:
+     - Key: study
+       Value: aws-study
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true 
+      AvailabilityZone: ap-northeast-1a
+      Tags:
+         - Key: study
+           Value: PublicSubnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: ap-northeast-1c
+      MapPublicIpOnLaunch: true
+      Tags:
+         - Key: study
+           Value: PublicSubnet2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: ap-northeast-1a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: study
+          Value: PrivateSubnet1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: ap-northeast-1c
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: study
+          Value: PrivateSubnet2   
+
+  #インターネットゲートウェイ# 
+ 
+  MyIGW:
+   Type: AWS::EC2::InternetGateway
+   Properties:
+     Tags:
+      - Key: study
+        Value: MyInternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref MyIGW
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+       - Key: study
+         Value: PublicRouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route 
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyIGW
+
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  #セキュリティグループ#
+
+  ELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP traffic
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp 
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP/HTTPS/8080 traffic
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp 
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp 
+          FromPort: 8080 
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  RDSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow MySQL access from EC2 
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp 
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  MyEC2Role:
+    Type: AWS::IAM::Role 
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com 
+            Action: sts:AssumeRole 
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  MyEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile 
+    Properties:
+      Roles:
+        - !Ref MyEC2Role 
+      
+  MyEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PublicSubnet1
+      IamInstanceProfile: !Ref MyEC2InstanceProfile
+      Monitoring: false
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      Tags:
+        - Key: study
+          Value: MyEC2
+
+  MyRDS:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: mystudydatebase
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: MySQL
+      EngineVersion: 8.0.41
+      LicenseModel: general-public-license
+      MasterUsername: !Sub "{{resolve:secretsmanager:hinata/db-secrets:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:hinata/db-secrets:SecretString:password}}"
+      VPCSecurityGroups:
+        - !Ref RDSecurityGroup
+      DBSubnetGroupName: !Ref MyDBSubnetGroup
+      MultiAZ: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 0
+
+
+  MyDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private subnets for RDS 
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: study
+          Value: MyDBSubnetGroup
+
+  MyELB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: MyELB
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ELBSecurityGroup
+      Scheme: internet-facing
+      Type: application
+
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: aws-study-elb-target-group
+      VpcId: !Ref MyVPC
+      Protocol: HTTP
+      Port: 80 
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: "traffic-port"
+      HealthCheckPath: "/"
+      HealthCheckIntervalSeconds: 10
+      Matcher:
+        HttpCode: 200
+      Tags:
+        - Key: Name 
+          Value: aws-study-elb-target-group
+      Targets:
+        - Id: !Ref MyEC2 
+          Port: 8080
+      
+  
+  MyListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref MyELB
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+      Port: 80
+      Protocol: HTTP
+
+#cloudwatch alarm#
+  EC2HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm                   #cloudwatchアラームのリソース作成#
+    Properties:
+      AlarmName: EC2CPUalarm                       #アラーム名#
+      MetricName: CPUUtilization                   #監視対象のメトリクス（今回の場合はCPU使用率）#
+      Namespace: AWS/EC2                           #メトリクスの属する名前（AWSのEC2の空間にあるという意味）#
+      Statistic: Average                           #統計値（アベレージは標準メトリクス）#
+      Period: 60                                   #評価する秒数間隔#
+      EvaluationPeriods: 2                         #アラームの判定の期間（２の場合２回連続）#
+      Threshold: 20                                #アラームの反応する数値の指定（今回の場合CPU使用率が２０パー超えたら）#
+      ComparisonOperator: GreaterThanThreshold     
+      Dimensions:                                  #どこに対してメトリクスを監視するか指定#
+        - Value: !Ref MyEC2
+          Name: InstanceId
+
+  #WAF WEBACLs#
+  MyWebACL:
+    Type: AWS::WAFv2::WebACL  #webACL本体の作成を行っている#
+    Properties:
+      Name: WebACL
+      Scope: REGIONAL         #WEBACLをどこで監視させるかの範囲を指定しているただまだ確定はしていなく事前に申告している状態（REGIONはALBとAPI Gateway)#      
+      DefaultAction:          #ルールに該当しない場合の動作(許可か拒否の二種類のみ)#
+        Allow: {}
+      VisibilityConfig:       #cloidwatch　Metricとログの設定#
+        MetricName: WebACLMetric   #自分でつける名前cloudwatchに出力される名前#
+        SampledRequestsEnabled: true  #実際にWAFが通過したリクエストのうち一部だけを抜粋して確認できるようにする主にトラブルシューティングに利用#
+        CloudWatchMetricsEnabled: true #WAFでとったメトリクス統計データをCloudwatchに送信する機能#
+      Rules:
+        - Name: AWSManagedCommonRules
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            MetricName: AWSManagedCommonRules
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+  
+    #WEBACLとALBの紐づけ#
+  WebACLAssociation:                               #WebACLをALBやAPIGatewayni適用#     
+    Type: AWS::WAFv2::WebACLAssociation            
+    DependsOn: MyELB
+    Properties:
+      ResourceArn: !Ref  MyELB                         #適用させたいリソース#
+      WebACLArn: !GetAtt MyWebACL.Arn                     #紐づけさせたいWEBACL#\
+
+  #CloudWatch Logの作成#
+  WAFLogGroup:
+    Type: AWS::Logs::LogGroup  #cloudwatch logのロググループの作成#
+    Properties:
+      LogGroupName: !Sub "aws-waf-logs-${NamePrefix}-waf"  #ロググループの名前自分決めCloudwatchのファイル名に当たる#
+      RetentionInDays: 30              #ログを何日保存しているのかの指定この場合３０日#
+  
+  WAFLogGroupPolicy:
+    Type: AWS::Logs::ResourcePolicy
+    Properties:
+      PolicyName: !Sub "aws-waf-logs-${NamePrefix}-waf-policy"
+      PolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { 
+                "Service": "delivery.logs.amazonaws.com" 
+              },
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-${NamePrefix}-waf:*"
+            }
+          ]
+        }
+          
+  WAFLoggingConfiguration:
+    Type: AWS::WAFv2::LoggingConfiguration
+    DependsOn:
+      - WAFLogGroup
+      - WAFLogGroupPolicy
+    Properties:
+      ResourceArn: !GetAtt MyWebACL.Arn
+      LogDestinationConfigs:
+        - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-${NamePrefix}-waf"
+Outputs:
+  VPCId:
+    Description: VPC ID 
+    Value: !Ref MyVPC
+
+  ELBDNSName:
+    Description: ALB DNS Name 
+    Value: !GetAtt MyELB.DNSName  
+
+  EC2PublicIP:
+    Description: EC2 Public ID 
+    Value: !GetAtt MyEC2.PublicIp
+  
+  RDSAddress:
+    Description: RDS Endpoint
+    Value: !GetAtt MyRDS.Endpoint.Address
