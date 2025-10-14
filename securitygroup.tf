@@ -55,7 +55,7 @@ resource "aws_security_group" "ec2_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["121.87.229.190/32"]
+    cidr_blocks = ["${var.allowed_ip}/32"]
   }
 
   # EC2から外部への通信をすべて許可

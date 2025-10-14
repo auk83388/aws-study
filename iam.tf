@@ -27,6 +27,6 @@ resource "aws_iam_role_policy_attachment" "cw_policy_attach" {
 
 #インスタンスプロファイル（EC2にロールを紐づけ）
 resource "aws_iam_instance_profile" "ec2_cloudwatch_profile" {
-  name = "ec2-cloudwatch-profile"
+  name = "ec2-cloudwatch-profile-demo"
   role = aws_iam_role.ec2_cloudwatch_role.name
 }

@@ -10,7 +10,6 @@ terraform {
 }
 #awsの東京を指定している
 provider "aws" {
-  region = "ap-northeast-1"
-
+  region = var.aws_region
 }
 

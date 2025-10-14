@@ -8,8 +8,12 @@
 .DS_Store
 Thumbs.db
 
-# Ignore Terraform local files and temp folders
-.terraform/
-*.tfstate
-*.tfstate.backup
-
+#security information
+terraform.tfvars              
+*.pem
+*.key
+*.csv
+*.json
+*.pfx
+*.crt
+secrets.auto.tfvars

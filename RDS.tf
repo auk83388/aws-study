@@ -26,8 +26,8 @@ resource "aws_db_instance" "mysql" {
   instance_class         = "db.t3.micro"
   allocated_storage      = 20    #容量の指定
   storage_type           = "gp2" #RDSのストレージの種類の指定gp2の場合は汎用SSDという設定
-  username               = "auk83388"
-  password               = "Hinata311"
+  username               = local.db_credentials.username
+  password               = local.db_credentials.password
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   parameter_group_name   = aws_db_parameter_group.mysql_native.name

@@ -7,8 +7,11 @@ resource "aws_instance" "aws_ec2" {
   instance_type               = "t2.micro"
   subnet_id                   = aws_subnet.public_a.id
   vpc_security_group_ids      = [aws_security_group.ec2_sg.id]
-  key_name                    = "auk83388"
+  key_name                    = var.key_name
   associate_public_ip_address = true
+
+  #IAMロールとの紐づけ
+  iam_instance_profile = aws_iam_instance_profile.ec2_cloudwatch_profile.name
 
   tags = {
     Name = "web-server"

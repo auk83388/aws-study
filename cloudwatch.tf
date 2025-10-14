@@ -20,16 +20,16 @@ resource "aws_cloudwatch_log_stream" "ec2_log_stream" {
 #cloudwatchアラームの作成
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   alarm_name          = "cpu_hiph_alarm"
-  comparison_operator = "GreaterThanThreshold"            #どんな条件で発火するかの設定
-  evaluation_periods  = 2                                 #２回連続で条件に達したら
-  metric_name         = "CPUUtilization"                  #監視対象のメトリクス
-  namespace           = "AWS/EC2"                         #EC2のメトリクス領域
-  period              = 60                                #評価間隔
+  comparison_operator = "GreaterThanThreshold" #どんな条件で発火するかの設定
+  evaluation_periods  = 2                      #２回連続で条件に達したら
+  metric_name         = "CPUUtilization"       #監視対象のメトリクス
+  namespace           = "AWS/EC2"              #EC2のメトリクス領域
+  period              = 60                     #評価間隔
   statistic           = "Average"
   threshold           = 80
   alarm_description   = "Trigger when EC2 CPU > 80%"
   dimensions = {
-    InstanceId = aws_instance.aws_ec2.id                  #監視対象今回の場合EC2
+    InstanceId = aws_instance.aws_ec2.id #監視対象今回の場合EC2
   }
 
   actions_enabled = false #アラームが反応したときの通知アクションの設定（今回は無効）
