@@ -13,7 +13,7 @@ variable "key_name" {
 variable "allowed_ip" {
   description = "my IP address"
   type        = string
-  default     = ""
+  
 }
 
 variable "db_username" {
