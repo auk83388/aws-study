@@ -1,0 +1,19 @@
+# Terraform local files
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+#security information
+terraform.tfvars              
+*.pem
+*.key
+*.csv
+*.json
+*.pfx
+*.crt
+secrets.auto.tfvars

@@ -1,0 +1,38 @@
+name: Terraform CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  terraform:
+    name: Terraform Validation
+    runs-on: ubuntu-latest   #github上の仮想マシンの名前使用するOSによって変わるがTerraformの場合はubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4  #ubuntuという仮想マシンに自分の書いたコードをコピーするために必要
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3 #ubuntuという仮想マシンは最初は空でコードをコピーしても利用する環境がないのでこのコードでTerraformのインストールするように指定する
+        with:
+          terraform_version: 1.7.5
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+# terraformの初期化
+      - name: Terraform Init
+        run: terraform init
+#コード内容が構文として正しいかの確認
+      - name: Terraform Validate
+        run: terraform validate
+#シミュレーションを行う
+      - name: Terraform Plan
+        run: terraform plan
