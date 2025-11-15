@@ -1,18 +1,38 @@
-name: GitHub Actions Demo
-run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
-on: [push]
+name: Terraform CI
+
+on:
+  push:
+    branches:
+      - terraform-study 
+  pull_request:
+
 jobs:
-  Explore-GitHub-Actions:
-    runs-on: ubuntu-latest
+  terraform:
+    name: Terraform Validation
+    runs-on: ubuntu-latest   #github上の仮想マシンの名前使用するOSによって変わるがTerraformの場合はubuntu-latest
+    
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-      - name: Check out repository code
-        uses: actions/checkout@v5
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: List files in the repository
-        run: |
-          ls ${{ github.workspace }}
-      - run: echo "🍏 This job's status is ${{ job.status }}."
+      - name: Checkout repository
+        uses: actions/checkout@v4  #ubuntuという仮想マシンに自分の書いたコードをコピーするために必要
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3 #ubuntuという仮想マシンは最初は空でコードをコピーしても利用する環境がないのでこのコードでTerraformのインストールするように指定する
+        with:
+          terraform_version: 1.7.5
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-1
+
+# terraformの初期化
+      - name: Terraform Init
+        run: terraform init
+#コード内容が構文として正しいかの確認
+      - name: Terraform Validate
+        run: terraform validate
+#シミュレーションを行う
+      - name: Terraform Plan
+        run: terraform plan
